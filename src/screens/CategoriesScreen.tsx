@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { magazinesAPI, Magazine } from '../services/api';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../types/navigation';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const { width, height } = Dimensions.get('window');
@@ -442,15 +442,13 @@ const CategoriesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       
-      <ScrollView 
-        horizontal 
+      <FlatList
+        data={filteredMagazines}
+        horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.magazinesScroll}
-        contentContainerStyle={styles.magazinesContent}
-      >
-        {filteredMagazines.map(magazine => (
+        keyExtractor={(item) => item._id}
+        renderItem={({ item: magazine }) => (
           <TouchableOpacity
-            key={magazine._id}
             style={styles.magazineItem}
             onPress={() => navigation.navigate('MagazineDetail', { 
               magazineId: magazine._id, 
@@ -483,8 +481,10 @@ const CategoriesScreen: React.FC = () => {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        )}
+        style={styles.magazinesScroll}
+        contentContainerStyle={styles.magazinesContent}
+      />
     </Animated.View>
   );
 

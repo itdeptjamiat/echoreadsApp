@@ -2,18 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { downloadManager, DownloadedMagazine, DownloadProgress, LibraryStats } from '../services/downloadManager';
 import { Magazine } from '../services/api';
-import { useAlert } from './AlertContext';
-
-interface ReadingList {
-  id: string;
-  name: string;
-  description?: string;
-  magazineIds: string[];
-  color: string;
-  icon: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { useSafeToast } from '../hooks/useSafeToast';
 
 interface LibraryContextType {
   // Downloaded magazines
@@ -27,22 +16,7 @@ interface LibraryContextType {
   bookmarkedMagazines: Magazine[];
   isBookmarked: (magazineId: string) => boolean;
   toggleBookmark: (magazine: Magazine) => Promise<void>;
-  removeBookmark: (magazineId: string) => Promise<void>;
-  
-  // Reading lists
-  readingLists: ReadingList[];
-  createReadingList: (name: string, description?: string, color?: string, icon?: string) => Promise<void>;
-  updateReadingList: (id: string, updates: Partial<ReadingList>) => Promise<void>;
-  deleteReadingList: (id: string) => Promise<void>;
-  addToReadingList: (listId: string, magazineId: string) => Promise<void>;
-  removeFromReadingList: (listId: string, magazineId: string) => Promise<void>;
-  
-  // Reading progress
-  updateReadProgress: (magazineId: string, progress: number) => Promise<void>;
-  
-  // Page bookmarks
-  addPageBookmark: (magazineId: string, page: number, title: string, note?: string) => Promise<void>;
-  removePageBookmark: (magazineId: string, bookmarkId: string) => Promise<void>;
+  removeBookmark: (magazine: Magazine) => Promise<void>;
   
   // Library stats
   libraryStats: LibraryStats;
@@ -71,11 +45,10 @@ interface LibraryProviderProps {
 }
 
 export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) => {
-  const { showSuccess, showError } = useAlert();
+  const { showToast } = useSafeToast();
   
   const [downloadedMagazines, setDownloadedMagazines] = useState<DownloadedMagazine[]>([]);
   const [bookmarkedMagazines, setBookmarkedMagazines] = useState<Magazine[]>([]);
-  const [readingLists, setReadingLists] = useState<ReadingList[]>([]);
   const [libraryStats, setLibraryStats] = useState<LibraryStats>({
     totalDownloaded: 0,
     totalSize: 0,
@@ -98,59 +71,29 @@ export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) =>
       const magazines = downloadManager.getAllDownloadedMagazines();
       setDownloadedMagazines(magazines);
       
-      // Load reading lists from storage
-      await loadReadingLists();
+      // Load bookmarked magazines
+      await loadBookmarkedMagazines();
       
-      // Update library stats
+      // Refresh library stats
       refreshLibraryStats();
       
     } catch (error) {
-      console.error('Error loading library data:', error);
-      showError('Error', 'Failed to load library data');
+      console.error('Failed to load library data:', error);
+      showToast('Failed to load library data', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadReadingLists = async () => {
+  const loadBookmarkedMagazines = async () => {
     try {
-      // In a real app, load from AsyncStorage or API
-      const defaultLists: ReadingList[] = [
-        {
-          id: '1',
-          name: 'Tech Deep Dive',
-          description: 'Latest technology insights and trends',
-          magazineIds: [],
-          color: '#f59e0b',
-          icon: 'laptop-outline',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '2',
-          name: 'Business Strategy',
-          description: 'Business insights and strategic thinking',
-          magazineIds: [],
-          color: '#10b981',
-          icon: 'briefcase-outline',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '3',
-          name: 'Science & Research',
-          description: 'Scientific discoveries and research papers',
-          magazineIds: [],
-          color: '#3b82f6',
-          icon: 'flask-outline',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      
-      setReadingLists(defaultLists);
+      const bookmarkedData = await AsyncStorage.getItem('bookmarked_magazines');
+      if (bookmarkedData) {
+        const bookmarked = JSON.parse(bookmarkedData);
+        setBookmarkedMagazines(bookmarked);
+      }
     } catch (error) {
-      console.error('Error loading reading lists:', error);
+      console.error('Failed to load bookmarked magazines:', error);
     }
   };
 
@@ -177,11 +120,11 @@ export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) =>
         return newMap;
       });
       
-      showSuccess('Download Complete', `${magazine.name} has been downloaded successfully!`);
+      showToast(`${magazine.name} has been downloaded successfully!`, 'success');
       
     } catch (error) {
       console.error('Error downloading magazine:', error);
-      showError('Download Failed', error instanceof Error ? error.message : 'Failed to download magazine');
+      showToast(error instanceof Error ? error.message : 'Failed to download magazine', 'error');
       
       // Clear progress on error
       setDownloadProgress(prev => {
@@ -204,13 +147,13 @@ export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) =>
         // Update stats
         refreshLibraryStats();
         
-        showSuccess('Removed', 'Magazine removed from downloads');
+        showToast('Magazine removed from downloads', 'success');
       } else {
-        showError('Error', 'Failed to remove magazine');
+        showToast('Failed to remove magazine', 'error');
       }
     } catch (error) {
       console.error('Error removing downloaded magazine:', error);
-      showError('Error', 'Failed to remove magazine');
+      showToast('Failed to remove magazine', 'error');
     }
   };
 
@@ -228,197 +171,39 @@ export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) =>
 
   const toggleBookmark = async (magazine: Magazine) => {
     try {
-      const isCurrentlyBookmarked = isBookmarked(magazine._id);
-      
-      if (isCurrentlyBookmarked) {
-        // Remove bookmark
-        setBookmarkedMagazines(prev => prev.filter(mag => mag._id !== magazine._id));
-        showSuccess('Bookmark Removed', 'Removed from your bookmarks');
+      if (isBookmarked(magazine._id)) {
+        await removeBookmark(magazine);
       } else {
-        // Add bookmark
-        setBookmarkedMagazines(prev => [...prev, magazine]);
-        showSuccess('Bookmark Added', 'Added to your bookmarks');
+        const updatedBookmarks = [...bookmarkedMagazines, magazine];
+        setBookmarkedMagazines(updatedBookmarks);
+        await AsyncStorage.setItem('bookmarked_magazines', JSON.stringify(updatedBookmarks));
+        showToast('Magazine added to bookmarks', 'success');
       }
-      
-      // Save to storage
-      await AsyncStorage.setItem('bookmarkedMagazines', JSON.stringify(bookmarkedMagazines));
     } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      showError('Error', 'Failed to update bookmark');
+      console.error('Failed to toggle bookmark:', error);
+      showToast('Failed to update bookmark', 'error');
     }
   };
 
-  const removeBookmark = async (magazineId: string) => {
+  const removeBookmark = async (magazine: Magazine) => {
     try {
-      setBookmarkedMagazines(prev => prev.filter(mag => mag._id !== magazineId));
-      await AsyncStorage.setItem('bookmarkedMagazines', JSON.stringify(bookmarkedMagazines));
-      showSuccess('Bookmark Removed', 'Removed from your bookmarks');
+      const updatedBookmarks = bookmarkedMagazines.filter(b => b._id !== magazine._id);
+      setBookmarkedMagazines(updatedBookmarks);
+      await AsyncStorage.setItem('bookmarked_magazines', JSON.stringify(updatedBookmarks));
+      showToast('Magazine removed from bookmarks', 'success');
     } catch (error) {
-      console.error('Error removing bookmark:', error);
-      showError('Error', 'Failed to remove bookmark');
-    }
-  };
-
-  const createReadingList = async (name: string, description?: string, color = '#f59e0b', icon = 'bookmark-outline') => {
-    try {
-      const newList: ReadingList = {
-        id: `list_${Date.now()}`,
-        name,
-        description,
-        magazineIds: [],
-        color,
-        icon,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setReadingLists(prev => [...prev, newList]);
-      showSuccess('List Created', `Reading list "${name}" created successfully!`);
-    } catch (error) {
-      console.error('Error creating reading list:', error);
-      showError('Error', 'Failed to create reading list');
-    }
-  };
-
-  const updateReadingList = async (id: string, updates: Partial<ReadingList>) => {
-    try {
-      setReadingLists(prev => 
-        prev.map(list => 
-          list.id === id 
-            ? { ...list, ...updates, updatedAt: new Date() }
-            : list
-        )
-      );
-      showSuccess('Updated', 'Reading list updated successfully!');
-    } catch (error) {
-      console.error('Error updating reading list:', error);
-      showError('Error', 'Failed to update reading list');
-    }
-  };
-
-  const deleteReadingList = async (id: string) => {
-    try {
-      setReadingLists(prev => prev.filter(list => list.id !== id));
-      showSuccess('Deleted', 'Reading list deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting reading list:', error);
-      showError('Error', 'Failed to delete reading list');
-    }
-  };
-
-  const addToReadingList = async (listId: string, magazineId: string) => {
-    try {
-      setReadingLists(prev => 
-        prev.map(list => 
-          list.id === listId 
-            ? { 
-                ...list, 
-                magazineIds: [...list.magazineIds, magazineId],
-                updatedAt: new Date() 
-              }
-            : list
-        )
-      );
-      showSuccess('Added', 'Magazine added to reading list!');
-    } catch (error) {
-      console.error('Error adding to reading list:', error);
-      showError('Error', 'Failed to add magazine to reading list');
-    }
-  };
-
-  const removeFromReadingList = async (listId: string, magazineId: string) => {
-    try {
-      setReadingLists(prev => 
-        prev.map(list => 
-          list.id === listId 
-            ? { 
-                ...list, 
-                magazineIds: list.magazineIds.filter(id => id !== magazineId),
-                updatedAt: new Date() 
-              }
-            : list
-        )
-      );
-      showSuccess('Removed', 'Magazine removed from reading list!');
-    } catch (error) {
-      console.error('Error removing from reading list:', error);
-      showError('Error', 'Failed to remove magazine from reading list');
-    }
-  };
-
-  const updateReadProgress = async (magazineId: string, progress: number) => {
-    try {
-      await downloadManager.updateReadProgress(magazineId, progress);
-      
-      // Update local state
-      setDownloadedMagazines(prev => 
-        prev.map(mag => 
-          mag.id === magazineId 
-            ? { ...mag, readProgress: progress, lastReadDate: new Date() }
-            : mag
-        )
-      );
-      
-      // Update stats
-      refreshLibraryStats();
-    } catch (error) {
-      console.error('Error updating read progress:', error);
-    }
-  };
-
-  const addPageBookmark = async (magazineId: string, page: number, title: string, note?: string) => {
-    try {
-      await downloadManager.addBookmark(magazineId, { page, title, note, timestamp: new Date() });
-      
-      // Update local state
-      setDownloadedMagazines(prev => 
-        prev.map(mag => 
-          mag.id === magazineId 
-            ? { 
-                ...mag, 
-                bookmarks: [
-                  ...mag.bookmarks,
-                  {
-                    id: `${magazineId}_${Date.now()}`,
-                    page,
-                    title,
-                    note,
-                    timestamp: new Date()
-                  }
-                ]
-              }
-            : mag
-        )
-      );
-    } catch (error) {
-      console.error('Error adding bookmark:', error);
-      showError('Error', 'Failed to add bookmark');
-    }
-  };
-
-  const removePageBookmark = async (magazineId: string, bookmarkId: string) => {
-    try {
-      await downloadManager.removeBookmark(magazineId, bookmarkId);
-      
-      // Update local state
-      setDownloadedMagazines(prev => 
-        prev.map(mag => 
-          mag.id === magazineId 
-            ? { 
-                ...mag, 
-                bookmarks: mag.bookmarks.filter(b => b.id !== bookmarkId)
-              }
-            : mag
-        )
-      );
-    } catch (error) {
-      console.error('Error removing bookmark:', error);
-      showError('Error', 'Failed to remove bookmark');
+      console.error('Failed to remove bookmark:', error);
+      showToast('Failed to remove bookmark', 'error');
     }
   };
 
   const refreshLibraryStats = () => {
-    const stats = downloadManager.getLibraryStats();
+    const stats: LibraryStats = {
+      totalDownloaded: downloadedMagazines.length,
+      totalSize: downloadedMagazines.reduce((sum, mag) => sum + (mag.fileSize || 0), 0),
+      totalReadTime: 0, // No reading functionality
+      averageProgress: 0, // No reading functionality
+    };
     setLibraryStats(stats);
   };
 
@@ -436,15 +221,6 @@ export const LibraryProvider: React.FC<LibraryProviderProps> = ({ children }) =>
     isBookmarked,
     toggleBookmark,
     removeBookmark,
-    readingLists,
-    createReadingList,
-    updateReadingList,
-    deleteReadingList,
-    addToReadingList,
-    removeFromReadingList,
-    updateReadProgress,
-    addPageBookmark,
-    removePageBookmark,
     libraryStats,
     refreshLibraryStats,
     downloadProgress,

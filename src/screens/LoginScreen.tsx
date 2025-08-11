@@ -15,13 +15,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProps } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import BeautifulAlert from '../components/BeautifulAlert';
 
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
-  const { login, isLoading, error, clearError } = useAuth();
+  const { login, isLoading, error, clearError, user } = useAuth();
+  const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,9 +40,23 @@ const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
     clearError();
   }, []);
 
-  const handleLogin = async () => {
+  // Check if user is already authenticated (should redirect automatically)
+  useEffect(() => {
+    if (user) {
+      // User is already authenticated, will redirect automatically
+    }
+  }, [user]);
+
+  const validateForm = () => {
     if (!email || !password) {
       showBeautifulAlert('Error', 'Please fill in all fields', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleLogin = async () => {
+    if (!validateForm()) {
       return;
     }
 
@@ -49,13 +65,13 @@ const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
       const result = await login({ email, password });
 
       if (result.success) {
-        showBeautifulAlert('Success', 'Welcome back to EchoReads!', 'success');
-        // Login successful - user will be automatically redirected by AuthContext
+        showToast('Login successful! Welcome back to EchoReads', 'success');
+        // The AuthContext will handle the navigation automatically
       } else {
         showBeautifulAlert('Error', result.message, 'error');
       }
-    } catch (error) {
-      showBeautifulAlert('Error', 'An unexpected error occurred', 'error');
+    } catch (error: any) {
+      showBeautifulAlert('Error', error.message || 'An unexpected error occurred', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +93,23 @@ const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
     }));
   };
 
+  // Don't render the form if user is already authenticated
+  if (user) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={['#0a0a0a', '#1a1a1a', '#2a2a2a']}
+          style={styles.backgroundGradient}
+        />
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner 
+            message="Redirecting to main app..." 
+            size="large" 
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -109,12 +142,8 @@ const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
                 <View style={styles.logoContainer}>
                   <Ionicons name="book" size={width * 0.1} color="#0a0a0a" />
                 </View>
-                <Text style={styles.title}>
-                  Magazine Hub
-                </Text>
-                <Text style={styles.subtitle}>
-                  Your gateway to endless stories
-                </Text>
+                <Text style={styles.title}>Welcome Back</Text>
+                <Text style={styles.subtitle}>Sign in to your EchoReads account</Text>
               </View>
 
               {/* Login Form */}
@@ -185,8 +214,6 @@ const LoginScreen: React.FC<NavigationProps> = ({ navigation }) => {
                     Forgot your password?
                   </Text>
                 </TouchableOpacity>
-
-
 
                 {/* Sign Up Link */}
                 <View style={styles.signupContainer}>
@@ -338,6 +365,11 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     fontWeight: 'bold',
     fontSize: Math.max(14, width * 0.035),
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

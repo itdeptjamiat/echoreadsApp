@@ -16,9 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../App';
-import { magazinesAPI, Magazine } from '../services/api';
-import ReadlyStyleMagazineCard from '../components/ReadlyStyleMagazineCard';
+import { RootStackParamList } from '../types/navigation';
+import { Magazine, magazinesAPI } from '../services/api';
+import MagazineCard from '../components/MagazineCard';
+import EnhancedMagazineCard from '../components/EnhancedMagazineCard';
 import ReadlyAudioPlayer from '../components/ReadlyAudioPlayer';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -37,120 +38,201 @@ const EnhancedHomeScreen: React.FC = () => {
   const [audioPosition, setAudioPosition] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
-  const autoScrollTimer = useRef<NodeJS.Timeout>();
+  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchMagazines();
-    return () => {
-      if (autoScrollTimer.current) {
-        clearInterval(autoScrollTimer.current);
-      }
-    };
   }, []);
 
-  // Auto-scroll temporarily disabled to prevent errors
-  /*
+  // Reset error when tab changes
   useEffect(() => {
-    if (magazines.length > 0) {
+    setError(null);
+  }, [activeTab]);
+
+  // Auto-advancing slider effect
+  useEffect(() => {
+    if (autoScrollEnabled && magazines.length > 0 && isInitialized) {
       startAutoScroll();
     }
+    
+    return () => {
+      if (autoScrollTimerRef.current) {
+        clearInterval(autoScrollTimerRef.current);
+      }
+    };
+  }, [autoScrollEnabled, magazines, isInitialized]);
+
+  // Reset current slide index when magazines change
+  useEffect(() => {
+    setCurrentSlideIndex(0);
   }, [magazines]);
-  */
+
+  const startAutoScroll = () => {
+    if (autoScrollTimerRef.current) {
+      clearInterval(autoScrollTimerRef.current);
+    }
+    
+    autoScrollTimerRef.current = setInterval(() => {
+      const filteredMagazines = getFilteredMagazines();
+      if (filteredMagazines.length > 1 && flatListRef.current) {
+        const nextIndex = (currentSlideIndex + 1) % filteredMagazines.length;
+        setCurrentSlideIndex(nextIndex);
+        
+        try {
+          flatListRef.current.scrollToIndex({
+            index: nextIndex,
+            animated: true,
+          });
+        } catch (error) {
+          console.log('Auto-scroll error, using scrollToOffset instead:', error);
+          // Fallback to scrollToOffset if scrollToIndex fails
+          const offset = nextIndex * (width * 0.85 + 16);
+          flatListRef.current.scrollToOffset({
+            offset: offset,
+            animated: true,
+          });
+        }
+      }
+    }, 3000); // Change slide every 3 seconds
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollTimerRef.current) {
+      clearInterval(autoScrollTimerRef.current);
+      autoScrollTimerRef.current = null;
+    }
+  };
 
   const fetchMagazines = async () => {
     try {
       setLoading(true);
+      console.log('Fetching magazines from API...');
+      
       const response = await magazinesAPI.getMagazines();
+      console.log('API Response:', response);
+      
       if (response.success && response.data && response.data.length > 0) {
-        console.log('Fetched magazines:', response.data.length);
+        console.log('Successfully fetched magazines:', response.data.length);
         setMagazines(response.data);
+        setIsInitialized(true); // Set initialized to true after successful fetch
       } else {
         console.log('API response not successful or empty:', response);
         // Fallback to sample data if API fails
-        const sampleMagazines = [
+        const fallbackMagazines: Magazine[] = [
           {
             _id: '1',
             name: 'National Geographic Traveller',
             category: 'Travel',
-            type: 'magazine',
+            type: 'free', // Match API structure
             image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=600&fit=crop',
             downloads: 1250,
             rating: 4.8,
             description: 'Explore the world through stunning photography and compelling stories.',
-            magzineType: 'Monthly',
+            magzineType: 'magzine', // Match API typo
             createdAt: new Date().toISOString(),
           },
           {
             _id: '2',
             name: 'Tech Weekly',
             category: 'Technology',
-            type: 'magazine',
+            type: 'pro', // Match API structure
             image: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=600&fit=crop',
             downloads: 890,
             rating: 4.5,
             description: 'Latest technology trends and innovations.',
-            magzineType: 'Weekly',
+            magzineType: 'magzine', // Match API typo
             createdAt: new Date().toISOString(),
           },
           {
             _id: '3',
-            name: 'Business Insights',
-            category: 'Business',
-            type: 'magazine',
-            image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=600&fit=crop',
-            downloads: 2100,
-            rating: 4.7,
-            description: 'Strategic business analysis and market trends.',
-            magzineType: 'Monthly',
+            name: 'AI in Healthcare Article',
+            category: 'Technology',
+            type: 'article',
+            image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=600&fit=crop',
+            downloads: 450,
+            rating: 4.9,
+            description: 'How artificial intelligence is revolutionizing medical diagnosis and treatment.',
+            magzineType: 'article',
             createdAt: new Date().toISOString(),
-          }
+          },
+          {
+            _id: '4',
+            name: 'Weekly News Digest',
+            category: 'News',
+            type: 'digest',
+            image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&h=600&fit=crop',
+            downloads: 1500,
+            rating: 4.3,
+            description: 'A comprehensive summary of the week\'s most important news.',
+            magzineType: 'digest',
+            createdAt: new Date().toISOString(),
+          },
         ];
-        setMagazines(sampleMagazines);
+        setMagazines(fallbackMagazines);
+        setIsInitialized(true); // Set initialized to true even with fallback
       }
     } catch (error) {
       console.error('Error fetching magazines:', error);
+      setError('Failed to load magazines. Please try again.');
       // Fallback to sample data on error
-      const sampleMagazines = [
+      const fallbackMagazines: Magazine[] = [
         {
           _id: '1',
           name: 'National Geographic Traveller',
           category: 'Travel',
-          type: 'magazine',
+          type: 'free', // Match API structure
           image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=600&fit=crop',
           downloads: 1250,
           rating: 4.8,
           description: 'Explore the world through stunning photography and compelling stories.',
-          magzineType: 'Monthly',
+          magzineType: 'magzine', // Match API typo
           createdAt: new Date().toISOString(),
         },
         {
           _id: '2',
           name: 'Tech Weekly',
           category: 'Technology',
-          type: 'magazine',
+          type: 'pro', // Match API structure
           image: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=600&fit=crop',
           downloads: 890,
           rating: 4.5,
           description: 'Latest technology trends and innovations.',
-          magzineType: 'Weekly',
+          magzineType: 'magzine', // Match API typo
           createdAt: new Date().toISOString(),
         },
         {
           _id: '3',
-          name: 'Business Insights',
-          category: 'Business',
-          type: 'magazine',
-          image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=600&fit=crop',
-          downloads: 2100,
-          rating: 4.7,
-          description: 'Strategic business analysis and market trends.',
-          magzineType: 'Monthly',
+          name: 'AI in Healthcare Article',
+          category: 'Technology',
+          type: 'article',
+          image: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=600&fit=crop',
+          downloads: 450,
+          rating: 4.9,
+          description: 'How artificial intelligence is revolutionizing medical diagnosis and treatment.',
+          magzineType: 'article',
           createdAt: new Date().toISOString(),
-        }
+        },
+        {
+          _id: '4',
+          name: 'Weekly News Digest',
+          category: 'News',
+          type: 'digest',
+          image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&h=600&fit=crop',
+          downloads: 1500,
+          rating: 4.3,
+          description: 'A comprehensive summary of the week\'s most important news.',
+          magzineType: 'digest',
+          createdAt: new Date().toISOString(),
+        },
       ];
-      setMagazines(sampleMagazines);
+      setMagazines(fallbackMagazines);
+      setIsInitialized(true); // Set initialized to true even with fallback
     } finally {
       setLoading(false);
     }
@@ -162,78 +244,75 @@ const EnhancedHomeScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const startAutoScroll = () => {
-    // Temporarily disabled auto-scroll to prevent errors
-    console.log('Auto-scroll disabled to prevent errors');
-    /*
-    autoScrollTimer.current = setInterval(() => {
-      if (magazines.length > 0 && flatListRef.current) {
-        // Only scroll if we have featured magazines to show
-        const featuredMagazines = getFilteredMagazines().slice(0, 5);
-        if (featuredMagazines.length > 0) {
-          const currentIndex = Math.floor(Math.random() * featuredMagazines.length);
-          // Use scrollToOffset instead of scrollToIndex to avoid range errors
-          const offset = currentIndex * (width * 0.85 + 16); // card width + margin
-          flatListRef.current.scrollToOffset({
-            offset: offset,
-            animated: true,
-          });
-        }
-      }
-    }, 5000);
-    */
-  };
-
   const getFilteredMagazines = () => {
-    console.log('Getting filtered magazines. Total:', magazines.length, 'Active tab:', activeTab);
-    
     if (activeTab === 'all') {
-      console.log('Returning all magazines:', magazines.length);
-      return magazines; // Show all magazines by default
+      return magazines;
     }
     
+    // More flexible filtering based on type and content
     const filtered = magazines.filter(magazine => {
-      // More flexible filtering based on available data
       const magazineType = magazine.type?.toLowerCase() || '';
-      const magazineCategory = magazine.category?.toLowerCase() || '';
       const magazineName = magazine.name?.toLowerCase() || '';
+      const magazineCategory = magazine.category?.toLowerCase() || '';
+      const magazineMagzineType = magazine.magzineType?.toLowerCase() || '';
       
-      console.log('Filtering magazine:', magazine.name, 'Type:', magazineType, 'Category:', magazineCategory);
+      console.log(`Filtering magazine: ${magazine.name}`);
+      console.log(`  - type: ${magazineType}`);
+      console.log(`  - magzineType: ${magazineMagzineType}`);
+      console.log(`  - activeTab: ${activeTab}`);
       
       switch (activeTab) {
         case 'magazines':
-          return magazineType.includes('magazine') || 
+          // Check multiple conditions for magazines
+          const isMagazine = magazineType === 'magazine' || 
+                 magazineType === 'pro' || // API returns "pro" for magazines
+                 magazineType === 'free' || // API returns "free" for magazines
+                 magazineMagzineType === 'magzine' || // API typo: "magzine"
+                 magazineMagzineType === 'magazine' ||
+                 magazineName.includes('magazine') ||
                  magazineCategory.includes('magazine') ||
-                 magazineName.includes('magazine');
+                 // If it's not explicitly an article or digest, treat as magazine
+                 (magazineType !== 'article' && magazineType !== 'digest' && 
+                  magazineMagzineType !== 'article' && magazineMagzineType !== 'digest');
+          
+          console.log(`  - isMagazine: ${isMagazine}`);
+          return isMagazine;
+          
         case 'articles':
-          return magazineType.includes('article') || 
-                 magazineCategory.includes('article') ||
-                 magazineName.includes('article');
+          const isArticle = magazineType === 'article' || 
+                 magazineMagzineType === 'article' ||
+                 magazineName.includes('article') ||
+                 magazineCategory.includes('article');
+          console.log(`  - isArticle: ${isArticle}`);
+          return isArticle;
+          
         case 'digests':
-          return magazineType.includes('digest') || 
-                 magazineCategory.includes('digest') ||
-                 magazineName.includes('digest');
+          const isDigest = magazineType === 'digest' || 
+                 magazineMagzineType === 'digest' ||
+                 magazineName.includes('digest') ||
+                 magazineCategory.includes('digest');
+          console.log(`  - isDigest: ${isDigest}`);
+          return isDigest;
+          
         default:
           return true;
       }
     });
     
-    console.log('Filtered result:', filtered.length);
+    console.log(`Filtered magazines for ${activeTab}:`, filtered.length);
     return filtered;
   };
 
   const handleMagazinePress = (magazine: Magazine) => {
-    navigation.navigate('MagazineDetail', { 
-      magazineId: magazine._id, 
-      magazineData: magazine 
+    navigation.navigate('MagazineDetail', {
+      magazineId: magazine._id,
+      magazineData: magazine,
     });
   };
 
   const handleAudioPlay = (magazine: Magazine) => {
     setCurrentAudioMagazine(magazine);
     setIsAudioPlaying(true);
-    setAudioDuration(249 * 60); // 249 minutes in seconds
-    setAudioPosition(0);
   };
 
   const handleAudioPause = () => {
@@ -371,53 +450,34 @@ const EnhancedHomeScreen: React.FC = () => {
               activeOpacity={0.9}
             >
               <Image source={{ uri: item.image }} style={styles.featuredImage} />
-              
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.95)']}
+                colors={['transparent', 'rgba(0,0,0,0.8)']}
                 style={styles.featuredOverlay}
               >
                 <View style={styles.featuredContent}>
                   <View style={styles.featuredHeader}>
                     <View style={styles.featuredTypeBadge}>
-                      <Text style={styles.featuredTypeText}>
-                        {item.type === 'free' ? 'FREE' : 'PRO'}
-                      </Text>
+                      <Text style={styles.featuredTypeText}>{item.type.toUpperCase()}</Text>
                     </View>
-                    
                     <TouchableOpacity 
                       style={styles.audioButton}
-                      onPress={() => {
-                        setCurrentAudioMagazine(item);
-                        handleAudioPlay(item);
-                      }}
+                      onPress={() => handleAudioPlay(item)}
                     >
                       <Ionicons name="play" size={20} color="#ffffff" />
                     </TouchableOpacity>
                   </View>
-                  
                   <View style={styles.featuredInfo}>
                     <Text style={styles.featuredCategory}>{item.category}</Text>
-                    <Text style={styles.featuredTitle} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.featuredDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                    
+                    <Text style={styles.featuredTitle} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.featuredDescription} numberOfLines={2}>{item.description}</Text>
                     <View style={styles.featuredMeta}>
                       <View style={styles.featuredMetaItem}>
                         <Ionicons name="download-outline" size={16} color="#a3a3a3" />
                         <Text style={styles.featuredMetaText}>{item.downloads}</Text>
                       </View>
-                      
                       <View style={styles.featuredMetaItem}>
-                        <Ionicons name="star" size={16} color="#f59e0b" />
-                        <Text style={styles.featuredMetaText}>{item.rating.toFixed(1)}</Text>
-                      </View>
-                      
-                      <View style={styles.featuredMetaItem}>
-                        <Ionicons name="time-outline" size={16} color="#a3a3a3" />
-                        <Text style={styles.featuredMetaText}>{item.magzineType}</Text>
+                        <Ionicons name="star" size={16} color="#fbbf24" />
+                        <Text style={styles.featuredMetaText}>{item.rating}</Text>
                       </View>
                     </View>
                   </View>
@@ -432,92 +492,79 @@ const EnhancedHomeScreen: React.FC = () => {
           snapToInterval={width * 0.85 + 16}
           decelerationRate="fast"
           contentContainerStyle={styles.carouselContent}
+          onScrollBeginDrag={() => stopAutoScroll()}
+          onScrollEndDrag={() => startAutoScroll()}
+          onMomentumScrollEnd={(event) => {
+            try {
+              const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width * 0.85 + 16));
+              const filteredMagazines = getFilteredMagazines();
+              if (newIndex >= 0 && newIndex < filteredMagazines.length) {
+                setCurrentSlideIndex(newIndex);
+              }
+            } catch (error) {
+              console.log('Error calculating slide index:', error);
+            }
+          }}
           onScrollToIndexFailed={() => {
-            // Handle scroll failures gracefully
             console.log('Scroll to index failed, continuing...');
           }}
         />
+        
+        {/* Slide Indicators */}
+        {featuredMagazines.length > 1 && (
+          <View style={styles.slideIndicators}>
+            {featuredMagazines.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.slideIndicator,
+                  index === currentSlideIndex && styles.activeSlideIndicator
+                ]}
+              />
+            ))}
+          </View>
+        )}
       </View>
     );
   };
 
   const renderMagazineGrid = () => {
     const filteredMagazines = getFilteredMagazines();
-    const gridMagazines = filteredMagazines.slice(5);
-
-    if (gridMagazines.length === 0) return null;
+    
+    if (filteredMagazines.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="newspaper-outline" size={64} color="#666" />
+          <Text style={styles.emptyStateText}>No {activeTab} available</Text>
+        </View>
+      );
+    }
 
     return (
-      <View style={styles.gridContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>All Content</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllText}>View all</Text>
+      <FlatList
+        ref={flatListRef}
+        data={filteredMagazines}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.magazineCard}
+            onPress={() => handleMagazinePress(item)}
+          >
+            <MagazineCard
+              magazine={item}
+              onPress={() => handleMagazinePress(item)}
+              onAudioPress={() => handleAudioPlay(item)}
+            />
           </TouchableOpacity>
-        </View>
-        
-        <FlatList
-          data={gridMagazines}
-          renderItem={({ item, index }) => (
-            <View style={styles.gridItem}>
-              <TouchableOpacity 
-                style={styles.gridCard}
-                onPress={() => handleMagazinePress(item)}
-                activeOpacity={0.8}
-              >
-                <Image source={{ uri: item.image }} style={styles.gridImage} />
-                
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.9)']}
-                  style={styles.gridOverlay}
-                >
-                  <View style={styles.gridContent}>
-                    <View style={styles.gridHeader}>
-                      <View style={styles.typeBadge}>
-                        <Text style={styles.typeText}>
-                          {item.type === 'free' ? 'FREE' : 'PRO'}
-                        </Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.gridInfo}>
-                      <Text style={styles.gridTitle} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-                      
-                      <Text style={styles.gridSubtitle} numberOfLines={1}>
-                        {item.description}
-                      </Text>
-                      
-                      <View style={styles.gridMeta}>
-                        <View style={styles.metaItem}>
-                          <Ionicons name="download-outline" size={14} color="#a3a3a3" />
-                          <Text style={styles.metaText}>{item.downloads}</Text>
-                        </View>
-                        
-                        <View style={styles.metaItem}>
-                          <Ionicons name="star" size={14} color="#f59e0b" />
-                          <Text style={styles.metaText}>{item.rating.toFixed(1)}</Text>
-                        </View>
-                        
-                        <View style={styles.metaItem}>
-                          <Ionicons name="time-outline" size={14} color="#a3a3a3" />
-                          <Text style={styles.metaText}>{item.magzineType}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-          keyExtractor={(item) => item._id}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={false}
-        />
-      </View>
+        )}
+        numColumns={2}
+        columnWrapperStyle={styles.magazineRow}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.magazineGrid}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      />
     );
   };
 
@@ -527,23 +574,39 @@ const EnhancedHomeScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
       
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#f59e0b"
-            colors={['#f59e0b']}
-          />
-        }
-      >
-        {renderHeader()}
-        {renderTabs()}
-        {renderFeaturedCarousel()}
-        {renderMagazineGrid()}
-      </ScrollView>
+      {renderHeader()}
+      {renderTabs()}
+      
+      {error ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchMagazines}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={[{ key: 'content' }]}
+          renderItem={() => (
+            <>
+              {renderFeaturedCarousel()}
+              {renderMagazineGrid()}
+            </>
+          )}
+          keyExtractor={() => 'content'}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#f59e0b"
+              colors={['#f59e0b']}
+            />
+          }
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
+      )}
 
       {currentAudioMagazine && (
         <ReadlyAudioPlayer
@@ -570,9 +633,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a0a0a',
-  },
-  scrollView: {
-    flex: 1,
   },
   header: {
     paddingHorizontal: Math.max(20, width * 0.05),
@@ -658,33 +718,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   carouselContainer: {
-    marginBottom: 32,
+    marginBottom: 30,
   },
   sectionTitle: {
-    fontSize: Math.max(20, Math.min(width * 0.05, 24)),
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#ffffff',
-    fontWeight: '600',
-    marginBottom: 20,
-    paddingHorizontal: Math.max(20, width * 0.05),
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   loadingContainer: {
-    height: 300,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyState: {
-    height: 200,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyStateText: {
-    fontSize: Math.max(16, Math.min(width * 0.04, 18)),
+    fontSize: 18,
     color: '#a3a3a3',
+    textAlign: 'center',
     marginTop: 16,
   },
   emptyStateSubtext: {
-    fontSize: Math.max(12, Math.min(width * 0.03, 14)),
-    color: '#a3a3a3',
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
     marginTop: 8,
   },
   carouselContent: {
@@ -877,6 +939,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#a3a3a3',
     marginLeft: 6,
+  },
+  magazineCard: {
+    width: (width - 24) / 2, // Adjust for margin
+    marginBottom: 16,
+  },
+  magazineRow: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  magazineGrid: {
+    paddingHorizontal: 8, // Adjust for margin
+  },
+  slideIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  slideIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginHorizontal: 4,
+  },
+  activeSlideIndicator: {
+    backgroundColor: '#f59e0b',
+    width: 12,
+  },
+  errorContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 
 });

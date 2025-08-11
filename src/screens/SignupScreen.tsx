@@ -15,13 +15,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProps } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import BeautifulAlert from '../components/BeautifulAlert';
 
 const { width, height } = Dimensions.get('window');
 
 const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
-  const { signup, isLoading, error, clearError } = useAuth();
+  const { signup, isLoading, error, clearError, user } = useAuth();
+  const { showToast } = useToast();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -41,6 +43,13 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
   useEffect(() => {
     clearError();
   }, []);
+
+  // Check if user is already authenticated (should redirect automatically)
+  useEffect(() => {
+    if (user) {
+      // User is already authenticated, will redirect automatically
+    }
+  }, [user]);
 
   const validateForm = () => {
     if (!name || !username || !email || !password || !confirmPassword) {
@@ -67,13 +76,7 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
   };
 
   const handleSignup = async () => {
-    if (!email || !password || !username || !name) {
-      showBeautifulAlert('Error', 'Please fill in all fields', 'error');
-      return;
-    }
-
-    if (password.length < 6) {
-      showBeautifulAlert('Error', 'Password must be at least 6 characters', 'error');
+    if (!validateForm()) {
       return;
     }
 
@@ -82,13 +85,24 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
       const result = await signup({ email, password, username, name });
 
       if (result.success) {
-        showBeautifulAlert('Success', 'Account created successfully! Welcome to EchoReads', 'success');
-        // User will be automatically redirected by AuthContext
+        if (result.message.includes('Please login')) {
+          // Signup successful but user needs to login manually
+          showToast('Account created successfully! Please login with your credentials.', 'success');
+          
+          // Wait a moment for the toast to be seen, then redirect to login
+          setTimeout(() => {
+            navigation.navigate('Login');
+          }, 2000);
+        } else {
+          // Signup successful with auto-login - user will be redirected to homepage automatically
+          showToast('Account created successfully! Welcome to EchoReads', 'success');
+          // The AuthContext will handle the navigation automatically to homepage
+        }
       } else {
         showBeautifulAlert('Error', result.message, 'error');
       }
-    } catch (error) {
-      showBeautifulAlert('Error', 'An unexpected error occurred', 'error');
+    } catch (error: any) {
+      showBeautifulAlert('Error', error.message || 'An unexpected error occurred', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -109,6 +123,24 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
       visible: false,
     }));
   };
+
+  // Don't render the form if user is already authenticated
+  if (user) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={['#0a0a0a', '#1a1a1a', '#2a2a2a']}
+          style={styles.backgroundGradient}
+        />
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner 
+            message="Redirecting to main app..." 
+            size="large" 
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -149,12 +181,8 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
                 <View style={styles.logoContainer}>
                   <Ionicons name="book" size={width * 0.1} color="#0a0a0a" />
                 </View>
-                <Text style={styles.title}>
-                  Create Account
-                </Text>
-                <Text style={styles.subtitle}>
-                  Join our community of readers
-                </Text>
+                <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.subtitle}>Join EchoReads and discover amazing content</Text>
               </View>
 
               {/* Signup Form */}
@@ -290,8 +318,6 @@ const SignupScreen: React.FC<NavigationProps> = ({ navigation }) => {
                   </Text>
                 </View>
 
-
-
                 {/* Login Link */}
                 <View style={styles.loginContainer}>
                   <Text style={styles.loginText}>Already have an account? </Text>
@@ -408,7 +434,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+      paddingVertical: 12,
   },
   textInput: {
     flex: 1,
@@ -459,6 +485,11 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     fontWeight: 'bold',
     fontSize: Math.max(14, width * 0.035),
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

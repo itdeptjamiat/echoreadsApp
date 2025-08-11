@@ -2,52 +2,91 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Magazine } from '../services/api';
 
 interface MagazineCardProps {
-  id: string;
-  title: string;
-  category: string;
-  cover: string;
-  articles: number;
-  readTime: string;
-  isBookmarked: boolean;
+  magazine: Magazine;
   onPress: () => void;
-  onBookmarkPress: () => void;
+  onAudioPress?: () => void;
 }
 
 const MagazineCard: React.FC<MagazineCardProps> = ({
-  title,
-  category,
-  cover,
-  articles,
-  readTime,
-  isBookmarked,
+  magazine,
   onPress,
-  onBookmarkPress,
+  onAudioPress,
 }) => {
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'magazine':
+        return '#f59e0b';
+      case 'article':
+        return '#3b82f6';
+      case 'digest':
+        return '#10b981';
+      default:
+        return '#f59e0b';
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'magazine':
+        return 'newspaper-outline';
+      case 'article':
+        return 'document-text-outline';
+      case 'digest':
+        return 'library-outline';
+      default:
+        return 'newspaper-outline';
+    }
+  };
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
-      <Image source={{ uri: cover }} style={styles.cover} />
+      <Image source={{ uri: magazine.image }} style={styles.cover} />
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.8)']}
         style={styles.overlay}
       >
+        <View style={styles.typeBadge}>
+          <Ionicons 
+            name={getTypeIcon(magazine.type) as any} 
+            size={12} 
+            color="#ffffff" 
+          />
+          <Text style={[styles.typeText, { color: getTypeColor(magazine.type) }]}>
+            {magazine.type.toUpperCase()}
+          </Text>
+        </View>
         <View style={styles.info}>
-          <Text style={styles.category}>{category}</Text>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.category}>{magazine.category}</Text>
+          <Text style={styles.title} numberOfLines={2}>{magazine.name}</Text>
           <View style={styles.meta}>
-            <Text style={styles.articles}>{articles} articles</Text>
-            <Text style={styles.readTime}>{readTime}</Text>
+            <View style={styles.metaItem}>
+              <Ionicons name="download-outline" size={12} color="#a3a3a3" />
+              <Text style={styles.metaText}>{formatNumber(magazine.downloads)}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="star" size={12} color="#fbbf24" />
+              <Text style={styles.metaText}>{magazine.rating}</Text>
+            </View>
           </View>
         </View>
       </LinearGradient>
-      <TouchableOpacity style={styles.bookmarkButton} onPress={onBookmarkPress}>
-        <Ionicons
-          name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-          size={20}
-          color={isBookmarked ? '#f59e0b' : '#ffffff'}
-        />
-      </TouchableOpacity>
+      {onAudioPress && (
+        <TouchableOpacity style={styles.audioButton} onPress={onAudioPress}>
+          <Ionicons name="play" size={16} color="#ffffff" />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 };
@@ -112,6 +151,40 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  audioButton: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#a3a3a3',
+    marginLeft: 4,
   },
 });
 

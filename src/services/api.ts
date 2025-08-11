@@ -1,7 +1,9 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://api.echoreads.online/api/v1';
+import envConfig from '../../config/environment';
+
+const API_BASE_URL = envConfig.apiUrl;
 
 // Create axios instance with default config
 const api = axios.create({
@@ -37,7 +39,7 @@ export interface LoginResponse {
 
 export interface SignupResponse {
   message: string;
-  user: {
+  user?: {
     user: {
       _id: string;
       email: string;
@@ -55,6 +57,12 @@ export interface SignupResponse {
     };
     token: string;
   };
+}
+
+// New interface for signup without immediate login
+export interface SignupSuccessResponse {
+  message: string;
+  success: boolean;
 }
 
 export interface LoginRequest {
@@ -240,6 +248,7 @@ export const authAPI = {
 export const magazinesAPI = {
   getMagazines: async (): Promise<MagazinesResponse> => {
     try {
+      console.log('🌐 Fetching magazines from:', `${API_BASE_URL}/user/magzines`);
       const response = await axios.get(`${API_BASE_URL}/user/magzines`);
       console.log('Magazines API Response:', response.data);
       return response.data;
@@ -251,7 +260,7 @@ export const magazinesAPI = {
 
   getMagazineById: async (magazineId: string): Promise<SingleMagazineResponse> => {
     try {
-      console.log('Fetching magazine with ID:', magazineId);
+      console.log('🌐 Fetching magazine with ID:', magazineId);
       
       // Get the stored token for authentication
       const token = await AsyncStorage.getItem('auth_token');

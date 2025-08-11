@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { magazinesAPI, Magazine } from '../services/api';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../types/navigation';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const { width, height } = Dimensions.get('window');

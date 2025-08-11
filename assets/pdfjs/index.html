@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; frame-ancestors 'none';">
+  <title>EchoReads PDF Viewer</title>
+  <link rel="stylesheet" href="viewer.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      color: #ffffff;
+    }
+    
+    #viewerContainer {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    #pdfViewer {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background-color: #1a1a1a;
+    }
+    
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #ffffff;
+      font-size: 18px;
+    }
+    
+    .error {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #ff6b6b;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .error-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .error-message {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    
+    .error-details {
+      font-size: 14px;
+      opacity: 0.7;
+    }
+    
+    /* Watermark styles */
+    .watermark {
+      position: absolute;
+      pointer-events: none;
+      z-index: 1000;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.1);
+      font-weight: bold;
+      transform: rotate(-45deg);
+    }
+    
+    .watermark-top-left { top: 20px; left: 20px; }
+    .watermark-top-right { top: 20px; right: 20px; transform: rotate(45deg); }
+    .watermark-bottom-left { bottom: 20px; left: 20px; }
+    .watermark-bottom-right { bottom: 20px; right: 20px; transform: rotate(45deg); }
+    
+    /* Disable text selection */
+    .textLayer {
+      pointer-events: none !important;
+    }
+    
+    .textLayer > span {
+      -webkit-user-select: none !important;
+      user-select: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewerContainer">
+    <div id="loading" class="loading">
+      Loading PDF Viewer...
+    </div>
+    
+    <div id="error" class="error" style="display: none;">
+      <div class="error-icon">⚠️</div>
+      <div class="error-message">Failed to load PDF</div>
+      <div class="error-details">Please try again</div>
+    </div>
+    
+    <iframe 
+      id="pdfViewer"
+      style="display: none;"
+      frameborder="0"
+      allowfullscreen
+    ></iframe>
+    
+    <!-- Watermarks -->
+    <div class="watermark watermark-top-left">Secure Content</div>
+    <div class="watermark watermark-top-right">Protected</div>
+    <div class="watermark watermark-bottom-left">Device Bound</div>
+    <div class="watermark watermark-bottom-right">No Screenshots</div>
+  </div>
+  
+  <script src="pdf.min.js"></script>
+  <script src="viewer.js"></script>
+  
+  <script>
+    // Disable context menu
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    
+    // Disable text selection
+    document.addEventListener('selectstart', e => e.preventDefault());
+    
+    // Block external navigation
+    document.addEventListener('click', e => {
+      if (e.target.tagName === 'A' && !e.target.href.startsWith('#')) {
+        e.preventDefault();
+      }
+    });
+    
+    // Initialize viewer when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Notify React Native that viewer is ready
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'READY',
+          payload: {
+            viewerVersion: '1.0.0',
+            capabilities: ['pdf', 'zoom', 'theme', 'watermark']
+          }
+        }));
+      }
+    });
+  </script>
+</body>
+</html> 

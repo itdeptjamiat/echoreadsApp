@@ -1,22 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI, LoginRequest, SignupRequest } from '../services/api';
-
-interface User {
-  _id: string;
-  email: string;
-  username: string;
-  name: string;
-  createdAt: string;
-  isVerified: boolean;
-  jwtToken: string;
-  plan: string;
-  profilePic: string;
-  resetPasswordOtpVerified: boolean;
-  uid: number;
-  userType: string;
-  __v: number;
-}
+import { User } from '../types/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -60,8 +45,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedUser = await AsyncStorage.getItem('auth_user');
       
       if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setToken(storedToken);
+          setUser(parsedUser);
+        } catch (parseError) {
+          await clearStoredAuth();
+        }
       }
     } catch (error) {
       console.error('Error loading stored auth:', error);
@@ -75,7 +65,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.setItem('auth_token', authToken);
       await AsyncStorage.setItem('auth_user', JSON.stringify(userData));
     } catch (error) {
-      console.error('Error storing auth data:', error);
+      console.error('❌ Error storing auth data:', error);
+      throw error;
     }
   };
 
@@ -84,7 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await AsyncStorage.removeItem('auth_token');
       await AsyncStorage.removeItem('auth_user');
     } catch (error) {
-      console.error('Error clearing stored auth:', error);
+      console.error('❌ Error clearing stored auth:', error);
     }
   };
 
@@ -94,23 +85,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       const response = await authAPI.login(credentials);
-      console.log('API Response:', response);
       
-      // Check if response has user and token (API returns nested user structure)
       if (response.user && response.user.user && response.user.token) {
-        console.log('Login successful, setting user:', response.user.user);
+        await storeAuthData(response.user.user, response.user.token);
         setUser(response.user.user);
         setToken(response.user.token);
-        await storeAuthData(response.user.user, response.user.token);
         return { success: true, message: 'Login successful!' };
       } else {
-        console.log('Login failed:', response.message);
-        setError(response.message);
-        return { success: false, message: response.message };
+        setError(response.message || 'Login failed');
+        return { success: false, message: response.message || 'Login failed' };
       }
-    } catch (error) {
-      console.log('Login error:', error);
-      const errorMessage = 'An unexpected error occurred during login.';
+    } catch (error: any) {
+      const errorMessage = error.message || 'Login failed';
       setError(errorMessage);
       return { success: false, message: errorMessage };
     } finally {
@@ -124,23 +110,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       const response = await authAPI.signup(userData);
-      console.log('Signup API Response:', response);
       
-      // Check if response has user and token (API returns nested user structure)
+      // Check what the API actually returns
       if (response.user && response.user.user && response.user.token) {
-        console.log('Signup successful, setting user:', response.user.user);
+        // Signup successful with user data - auto login
+        await storeAuthData(response.user.user, response.user.token);
         setUser(response.user.user);
         setToken(response.user.token);
-        await storeAuthData(response.user.user, response.user.token);
         return { success: true, message: 'Account created successfully!' };
+      } else if (response.message && response.message.includes('successfully')) {
+        // Signup successful but no user data - user needs to login
+        return { 
+          success: true, 
+          message: 'Account created successfully! Please login with your credentials.' 
+        };
       } else {
-        console.log('Signup failed:', response.message);
-        setError(response.message);
-        return { success: false, message: response.message };
+        setError(response.message || 'Signup failed');
+        return { success: false, message: response.message || 'Signup failed' };
       }
-    } catch (error) {
-      console.log('Signup error:', error);
-      const errorMessage = 'An unexpected error occurred during signup.';
+    } catch (error: any) {
+      const errorMessage = error.message || 'Signup failed';
       setError(errorMessage);
       return { success: false, message: errorMessage };
     } finally {

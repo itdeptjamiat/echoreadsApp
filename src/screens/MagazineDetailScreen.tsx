@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { magazinesAPI, Magazine } from '../services/api';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../types/navigation';
 import LoadingSpinner from '../components/LoadingSpinner';
 import RatingModal from '../components/RatingModal';
 import RatingDisplay from '../components/RatingDisplay';
@@ -35,7 +35,6 @@ const MagazineDetailScreen: React.FC = () => {
   const [loading, setLoading] = useState(!magazineData);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [reading, setReading] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'ratings'>('details');
 
@@ -110,21 +109,6 @@ const MagazineDetailScreen: React.FC = () => {
       showBeautifulAlert('Error', 'Failed to download magazine', 'error');
     } finally {
       setDownloading(false);
-    }
-  };
-
-  const handleRead = async () => {
-    setReading(true);
-    try {
-      // Navigate to reading screen
-      navigation.navigate('Reading', {
-        magazineId,
-        magazineData: magazine!,
-      });
-    } catch (error) {
-      showBeautifulAlert('Error', 'Failed to open magazine', 'error');
-    } finally {
-      setReading(false);
     }
   };
 
@@ -443,49 +427,39 @@ const MagazineDetailScreen: React.FC = () => {
       {/* Enhanced Action Buttons */}
       <View style={styles.actionContainer}>
         <View style={styles.actionButtonGroup}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.downloadButton]}
-          onPress={handleDownload}
-            disabled={downloading || isDownloading(magazine?._id || '')}
+          {/* Download Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.downloadButton]}
+            onPress={handleDownload}
+            disabled={downloading}
           >
-            {downloading || isDownloading(magazine?._id || '') ? (
-              <LoadingSpinner message="..." size="small" type="pulse" />
-            ) : isDownloaded(magazine?._id || '') ? (
-              <>
-                <Ionicons name="checkmark-circle" size={Math.max(16, width * 0.04)} color="#10b981" />
-                <Text style={[styles.actionButtonText, { color: '#10b981' }]} numberOfLines={1}>Saved</Text>
-              </>
-          ) : (
-            <>
-                <Ionicons name="download-outline" size={Math.max(16, width * 0.04)} color="#ffffff" />
-                <Text style={styles.actionButtonText} numberOfLines={1}>Save</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.readButton]}
-          onPress={handleRead}
-          disabled={reading}
-        >
-          {reading ? (
+            {downloading ? (
               <LoadingSpinner message="..." size="small" type="wave" />
-          ) : (
-            <>
-                <Ionicons name="book-outline" size={Math.max(16, width * 0.04)} color="#ffffff" />
-                <Text style={styles.actionButtonText} numberOfLines={1}>Read</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={Math.max(16, width * 0.04)} color="#ffffff" />
+                <Text style={styles.actionButtonText} numberOfLines={1}>Download</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rateButton]}
+            onPress={handleRateMagazine}
+          >
+            <Ionicons name="star-outline" size={Math.max(16, width * 0.04)} color="#ffffff" />
+            <Text style={styles.actionButtonText} numberOfLines={1}>Rate</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.rateButton]}
-          onPress={handleRateMagazine}
-        >
-          <Ionicons name="star-outline" size={Math.max(16, width * 0.04)} color="#ffffff" />
-          <Text style={styles.actionButtonText} numberOfLines={1}>Rate</Text>
-        </TouchableOpacity>
+        {/* Beautiful Alert */}
+        <BeautifulAlert
+          visible={alertState.visible}
+          title={alertState.title}
+          message={alertState.message}
+          type={alertState.type}
+          onClose={hideAlert}
+        />
       </View>
 
       {/* Rating Modal */}
@@ -496,15 +470,6 @@ const MagazineDetailScreen: React.FC = () => {
         magazineName={magazine?.name || ''}
         magazineMid={magazine?.mid}
         onRatingSubmitted={handleRatingSubmitted}
-      />
-
-      {/* Beautiful Alert */}
-      <BeautifulAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        type={alertState.type}
-        onClose={hideAlert}
       />
     </SafeAreaView>
   );

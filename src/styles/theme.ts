@@ -8,6 +8,11 @@ export const colors = {
   primaryLight: '#fbbf24',
   primaryDark: '#d97706',
   
+  // Secondary colors
+  secondary: '#3b82f6',
+  secondaryLight: '#60a5fa',
+  secondaryDark: '#1d4ed8',
+  
   // Background colors
   background: '#0a0a0a',
   surface: '#1a1a1a',
